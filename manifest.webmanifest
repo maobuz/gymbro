@@ -1,0 +1,16 @@
+{
+  "name": "GymBro Lite",
+  "short_name": "GymBro",
+  "description": "Diario di allenamento: schede, serie, pesi, progressi e corsa.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eceff2",
+  "theme_color": "#eceff2",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
