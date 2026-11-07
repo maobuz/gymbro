@@ -156,6 +156,9 @@ h2{font-family:var(--f-display);font-weight:600;font-size:21px;margin:0;line-hei
 .steps{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
 .pbox{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:15px}
 .pbox .steps{color:var(--ink)}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:3px;margin:6px 0 16px}
+.seg button{border:0;background:transparent;border-radius:8px;min-height:38px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.15)}
 /* timer + nav */
 #timer{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:20;padding:0 max(12px,env(safe-area-inset-right,0px)) 8px max(12px,env(safe-area-inset-left,0px));pointer-events:none}
 #timer .tb{max-width:616px;margin:0 auto;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:10px;pointer-events:auto;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.25)}
@@ -442,16 +445,16 @@ function renderSheet(){
    <button class="btn primary block" style="margin-top:8px" data-act="addcustom">Crea e aggiungi</button></div></div></div></div>`;
 }
 
-function vProgressi(){
+function vProgPalestra(){
   const used=[...new Set(allSets().filter(s=>s.w>0).map(s=>s.ex))];
-  if(!used.length) return `<h1>Progressi</h1><div class="card empty"><strong>Ancora nessun dato</strong>Completa la prima serie da Allenamento: qui vedrai l'andamento dei pesi per ogni esercizio.</div>`;
+  if(!used.length) return `<div class="card empty"><strong>Ancora nessun dato</strong>Completa la prima serie da Allenamento: qui vedrai l'andamento dei pesi per ogni esercizio.</div>`;
   used.sort((a,b)=>exInfo(a).n.localeCompare(exInfo(b).n,"it"));
   if(!progEx||!used.includes(progEx)){const last=allSets().sort((a,b)=>b.t-a.t)[0];progEx=last.ex;}
   const m=setsByDay(progEx), days=Object.keys(m).sort();
   const pts=days.map(k=>({k,w:Math.max(...m[k].map(s=>s.w)),rm:Math.max(...m[k].map(s=>e1rm(s.w,s.r))),vol:m[k].reduce((a,s)=>a+s.w*s.r,0)}));
   const rec=Math.max(...pts.map(p=>p.w)), bestRm=Math.max(...pts.map(p=>p.rm));
   const first=pts[0].w, delta=pts[pts.length-1].w-first;
-  return `<h1>Progressi</h1>
+  return `
   <label class="label" for="pe">Esercizio</label>
   <select class="inp" id="pe" style="margin:6px 0 14px">${used.map(id=>`<option value="${id}" ${id===progEx?"selected":""}>${esc(exInfo(id).n)}</option>`).join("")}</select>
   <div class="stats"><div class="stat"><div class="label">Record</div><div class="v">${fmt(rec)}<small> kg</small></div></div>
@@ -630,10 +633,7 @@ function saveRunForm(){
   saveRuns(); runForm=false; render(); toast("Corsa salvata: "+fmt(km)+" km a "+paceTxt(sec,km)+"/km");
 }
 function vCorsa(){
-  const runs=(state.runs||[]).slice().sort((a,b)=>b.t-a.t), now=Date.now();
-  const sumKm=a=>a.reduce((s,r)=>s+r.km,0), sumSec=a=>a.reduce((s,r)=>s+r.sec,0);
-  const wk=runs.filter(r=>r.t>=weekStart(now).getTime()), mo=runs.filter(r=>dayKey(r.t).slice(0,7)===dayKey(now).slice(0,7));
-  const l4=runs.filter(r=>r.t>=now-28*864e5);
+  const runs=(state.runs||[]), now=Date.now();
   const form=runForm?`<div class="card" style="margin-bottom:14px"><h2 style="margin-bottom:10px">Nuova corsa</h2>${pianoBox()}<div class="rform">
     <label>Data<input class="inp" type="date" id="rf-d" value="${dayKey(now)}"></label>
     <label>Tipo<select class="inp" id="rf-tipo">${tipiForm().map(t=>`<option ${runPick&&planById(runPick)&&planById(runPick).nome===t?"selected":""}>${esc(t)}</option>`).join("")}</select></label>
@@ -642,21 +642,42 @@ function vCorsa(){
     <label>FC media (facoltativa)<input class="inp" id="rf-hr" inputmode="numeric" placeholder="bpm"></label></div>
     <div class="row" style="margin-top:12px"><button class="btn primary grow" data-act="runsave">Salva corsa</button><button class="btn ghost" data-act="runcancel">Annulla</button></div></div>`:"";
   const src=acts.status==="ok"?"Le corse registrate con l'orologio arrivano da sole da Garmin.":acts.status==="error"?"Importazione da Garmin non disponibile al momento: puoi aggiungere le corse a mano.":"";
-  if(!runs.length) return `<h1>Corsa</h1><p class="sub">Chilometri, tempi e passo delle tue uscite.</p>${form}${runForm?"":vPiani()}
-    <div class="card empty"><strong>Nessuna corsa ancora</strong>${src||"Aggiungi la prima uscita per vedere chilometri e passo."}${runForm?"":`<div style="margin-top:12px"><button class="btn primary" data-act="runadd">+ Aggiungi corsa</button></div>`}</div>`;
+  const wk=runs.filter(r=>r.t>=weekStart(now).getTime()), kmWk=wk.reduce((s,r)=>s+r.km,0);
+  const last=runs.slice().sort((a,b)=>b.t-a.t)[0];
+  return `<h1>Corsa</h1><p class="sub">${src||"Scegli un allenamento, corri e salva l'uscita."}</p>
+  ${form}${runForm?"":`<button class="btn primary block" data-act="runadd" style="margin-bottom:14px">+ Aggiungi corsa</button>`}
+  ${runForm?"":vPiani()}
+  ${runForm||!runs.length?"":`<div class="card row between"><div class="grow"><div class="label">Questa settimana</div>
+    <div class="meta" style="margin-top:2px">${fmt(Math.round(kmWk*10)/10)} km in ${wk.length} ${wk.length===1?"uscita":"uscite"}${last?" · ultima il "+dShort(dayKey(last.t)):""}</div></div>
+    <button class="btn sm" data-act="goprog-corsa">Vedi progressi</button></div>`}`;
+}
+function vProgCorsa(){
+  const runs=(state.runs||[]).slice().sort((a,b)=>b.t-a.t), now=Date.now();
+  if(!runs.length) return `<div class="card empty"><strong>Nessuna corsa ancora</strong>Le uscite che salvi nella sezione Corsa compaiono qui, con chilometri e passo.
+    <div style="margin-top:12px"><button class="btn primary" data-act="tab" data-v="corsa">Vai a Corsa</button></div></div>`;
+  const sumKm=a=>a.reduce((s,r)=>s+r.km,0), sumSec=a=>a.reduce((s,r)=>s+r.sec,0);
+  const wk=runs.filter(r=>r.t>=weekStart(now).getTime()), mo=runs.filter(r=>dayKey(r.t).slice(0,7)===dayKey(now).slice(0,7));
+  const l4=runs.filter(r=>r.t>=now-28*864e5);
   const weeks=[];for(let i=7;i>=0;i--){const s=weekStart(now);s.setDate(s.getDate()-7*i);const e=new Date(s);e.setDate(e.getDate()+7);weeks.push({s,km:sumKm(runs.filter(r=>r.t>=s.getTime()&&r.t<e.getTime()))});}
-  return `<h1>Corsa</h1><p class="sub">${src||"Chilometri, tempi e passo delle tue uscite."}</p>
-  <div class="stats"><div class="stat"><div class="label">Settimana</div><div class="v">${fmt(Math.round(sumKm(wk)*10)/10)}<small> km</small></div></div>
+  return `<div class="stats"><div class="stat"><div class="label">Settimana</div><div class="v">${fmt(Math.round(sumKm(wk)*10)/10)}<small> km</small></div></div>
   <div class="stat"><div class="label">Mese</div><div class="v">${fmt(Math.round(sumKm(mo)*10)/10)}<small> km</small></div></div>
   <div class="stat"><div class="label">Passo 4 sett.</div><div class="v">${paceTxt(sumSec(l4),sumKm(l4))}<small> /km</small></div></div></div>
-  ${form}${runForm?"":`<button class="btn primary block" data-act="runadd" style="margin-bottom:14px">+ Aggiungi corsa</button>`}
-  ${runForm?"":vPiani()}<div class="card" style="margin-bottom:12px"><div class="label">Km per settimana</div>${weekChart(weeks)}</div>
+  <div class="card" style="margin-bottom:12px"><div class="label">Km per settimana</div>${weekChart(weeks)}</div>
   <div class="card"><div class="label" style="margin-bottom:2px">Uscite</div><div class="runs">${runs.slice(0,30).map(r=>`<div class="run"><div class="grow">
     <div class="main">${fmt(Math.round(r.km*100)/100)} km <span>· ${durTxt(r.sec)} · ${paceTxt(r.sec,r.km)}/km</span></div>
     <div class="meta">${dShort(dayKey(r.t))} · ${esc(r.tipo)}${r.hr?" · FC "+r.hr+(r.hrMax?"/"+r.hrMax:""):""}${r.te?" · effetto aerobico "+fmt(r.te):""}${r.g?' · <span class="src">Garmin</span>':""}</div></div>
     <button class="iconbtn" data-act="rundel" data-id="${r.id}" aria-label="Elimina corsa">${confirmDel===r.id?"?":"✕"}</button></div>`).join("")}</div>
     ${runs.some(r=>r.id===confirmDel)?'<p class="meta" style="margin:6px 0 0">Tocca di nuovo "?" per eliminare.</p>':""}</div>`;
 }
+let progTab="palestra";
+function vProgressi(){
+  const t=(v,l)=>`<button class="${progTab===v?"on":""}" data-act="ptab" data-v="${v}" role="tab" aria-selected="${progTab===v}">${l}</button>`;
+  return `<h1>Progressi</h1><div class="seg" role="tablist">${t("palestra","Palestra")}${t("corsa","Corsa")}</div>${progTab==="corsa"?vProgCorsa():vProgPalestra()}`;
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act]"); if(!b) return;
+  if(b.dataset.act==="ptab"){progTab=b.dataset.v;confirmDel=null;render();}
+  else if(b.dataset.act==="goprog-corsa"){progTab="corsa";go("progressi");}
+});
 function weekChart(weeks){
   const W=340,H=150,pl=8,pr=8,pt=18,pb=22,max=Math.max(1,...weeks.map(w=>w.km)),bw=(W-pl-pr)/weeks.length;
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Chilometri per settimana, ultime 8 settimane">
