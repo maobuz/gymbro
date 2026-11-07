@@ -149,6 +149,13 @@ h2{font-family:var(--f-display);font-weight:600;font-size:21px;margin:0;line-hei
 .src{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text)}
 .rform{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .rform label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.plan{padding:12px 0;border-bottom:1px solid var(--line)}
+.plan:last-child{border-bottom:0;padding-bottom:0}
+.plan h2{font-size:19px}
+.pdesc{margin:6px 0 0;font-size:14px}
+.steps{margin:8px 0 0;padding-left:20px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:3px}
+.pbox{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:15px}
+.pbox .steps{color:var(--ink)}
 /* timer + nav */
 #timer{position:fixed;left:0;right:0;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:20;padding:0 max(12px,env(safe-area-inset-right,0px)) 8px max(12px,env(safe-area-inset-left,0px));pointer-events:none}
 #timer .tb{max-width:616px;margin:0 auto;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 12px;display:flex;align-items:center;gap:10px;pointer-events:auto;position:relative;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.25)}
@@ -250,7 +257,7 @@ function importOttobre(){
 }
 function saveMonth(k){writeDoc(k,{sets:state.months[k]||[]});}
 function saveGarmin(){writeDoc("garmin",{days:state.garmin||{}});}
-function saveRuns(){writeDoc("runs",{list:state.runs||[],hidden:state.runsHidden||[]});}
+function saveRuns(){writeDoc("runs",{list:state.runs||[],hidden:state.runsHidden||[],plans:state.runPlans||[]});}
 let cloudReady=false;
 
 async function initCloud(){
@@ -269,17 +276,17 @@ async function initCloud(){
         if(!state.esempio) saveConfig();
         Object.keys(state.months).forEach(saveMonth);
         if(state.garmin&&Object.keys(state.garmin).length) saveGarmin();
-        if(state.runs&&state.runs.length) saveRuns();
+        if((state.runs&&state.runs.length)||(state.runPlans&&state.runPlans.length)) saveRuns();
         ready();
       }
       return;
     }
     settled=true;
-    const next={schede:state.schede,custom:state.custom,months:{},esempio:state.esempio,garmin:state.garmin||{},runs:state.runs||[],runsHidden:state.runsHidden||[],imports:state.imports||[],ver:state.ver};
+    const next={schede:state.schede,custom:state.custom,months:{},esempio:state.esempio,garmin:state.garmin||{},runs:state.runs||[],runsHidden:state.runsHidden||[],runPlans:state.runPlans||[],imports:state.imports||[],ver:state.ver};
     snap.docs.forEach(d=>{const b=clone(d.data()||{});
       if(d.id==="config"){next.schede=b.schede||[];next.custom=b.custom||[];next.imports=b.imports||[];next.esempio=false;}
       else if(d.id==="garmin") next.garmin=b.days||{};
-      else if(d.id==="runs"){next.runs=b.list||[];next.runsHidden=b.hidden||[];}
+      else if(d.id==="runs"){next.runs=b.list||[];next.runsHidden=b.hidden||[];next.runPlans=b.plans||[];}
       else if(d.id.startsWith("m-")) next.months[d.id]=b.sets||[];});
     state=next; lsSave(); softRender();
     if(!snap.metadata.fromCache&&!cloudReady) ready();
@@ -548,6 +555,43 @@ function vGarmin(){
 /* ---------- Corsa ---------- */
 let runForm=false, acts={status:"loading",list:[]};
 const TIPI=["Corsa lenta","Ripetute","Lungo","Gara","Tapis roulant"];
+/* Allenamenti di corsa pronti da scegliere */
+const RUN_LIB=[
+ {id:"cc",nome:"Corsa e camminata",cat:"Per iniziare",min:35,desc:"Per riprendere a correre senza strafare: tratti di corsa leggera alternati a camminata.",passi:["5' camminata veloce","8 volte: 2' corsa leggera + 1' camminata","5' camminata"]},
+ {id:"fl",nome:"Fondo lento",cat:"Base",min:35,desc:"Corsa facile e continua a un ritmo in cui riesci a parlare. È la base di tutto.",passi:["30–40' a ritmo di conversazione","Finisci con 5' di camminata e un po' di stretching"]},
+ {id:"rec",nome:"Corsa di recupero",cat:"Base",min:25,desc:"Uscita molto tranquilla per il giorno dopo un allenamento duro.",passi:["20–25' molto lenti, anche più lenti del fondo lento"]},
+ {id:"fm",nome:"Fondo medio",cat:"Qualità",min:35,desc:"Un tratto centrale a ritmo sostenuto ma controllato: allena la resistenza alla velocità.",passi:["10' corsa lenta di riscaldamento","20' a ritmo medio: respiro impegnato, frasi brevi","5' corsa lenta di defaticamento"]},
+ {id:"pr",nome:"Progressivo",cat:"Qualità",min:30,desc:"Si parte piano e si chiude veloci: insegna a gestire il ritmo.",passi:["10' lento","10' medio","10' sostenuto","Camminata finché il respiro torna normale"]},
+ {id:"fk",nome:"Fartlek",cat:"Qualità",min:35,desc:"\"Gioco di velocità\": cambi di ritmo liberi, meno rigido delle ripetute.",passi:["10' corsa lenta","20' alternando 1' veloce e 2' lento","5' corsa lenta"]},
+ {id:"r400",nome:"Ripetute brevi 8×400 m",cat:"Qualità",min:40,desc:"Tratti brevi e veloci per migliorare velocità e soglia.",passi:["10' corsa lenta + qualche allungo","8 volte: 400 m veloci + 90\" di recupero camminando o trottando","10' corsa lenta"]},
+ {id:"r1000",nome:"Ripetute lunghe 4×1000 m",cat:"Qualità",min:45,desc:"Tratti più lunghi a ritmo sostenuto e costante.",passi:["10' corsa lenta","4 volte: 1000 m sostenuti + 2' di recupero trottando","10' corsa lenta"]},
+ {id:"sal",nome:"Ripetute in salita",cat:"Forza",min:35,desc:"Brevi salite a buon ritmo: rinforzano gambe e appoggio.",passi:["10' corsa lenta fino a una salita","6–8 volte: 30\" in salita a buon ritmo + ritorno in discesa camminando","10' corsa lenta"]},
+ {id:"tap",nome:"Intervalli su tapis roulant",cat:"Qualità",min:30,desc:"Pensato per la palestra, anche dopo i pesi. Pendenza all'1% per simulare la strada.",passi:["5' corsa lenta","10 volte: 1' veloce + 1' lento","5' corsa lenta"]},
+ {id:"lun",nome:"Lungo",cat:"Resistenza",min:70,desc:"L'uscita lunga della settimana, sempre a ritmo facile.",passi:["60–75' lenti e costanti","Porta acqua se fa caldo","Camminata e stretching alla fine"]}
+];
+let runPick=null, showLib=false;
+const planById=id=>RUN_LIB.find(p=>p.id===id);
+function vPiani(){
+  const mine=(state.runPlans||[]).map(planById).filter(Boolean);
+  const head=p=>`<div class="row between" style="align-items:flex-start"><div class="grow"><h2>${esc(p.nome)}</h2><div class="meta">${esc(p.cat)} · circa ${p.min} min</div></div>`;
+  let body;
+  if(showLib) body=`<p class="meta" style="margin:4px 0 0">Scegli quelli che vuoi fare: compariranno nei tuoi allenamenti e tra i tipi di corsa.</p>`+RUN_LIB.map(p=>{const on=(state.runPlans||[]).includes(p.id);
+    return `<div class="plan">${head(p)}<button class="btn sm ${on?"":"primary"}" data-act="rp-toggle" data-id="${p.id}">${on?"✓ Scelto":"+ Scegli"}</button></div>
+    <p class="pdesc">${esc(p.desc)}</p><ol class="steps">${p.passi.map(s=>`<li>${esc(s)}</li>`).join("")}</ol></div>`;}).join("");
+  else body=mine.length?mine.map(p=>`<div class="plan">${head(p)}<button class="btn sm primary" data-act="rp-do" data-id="${p.id}">Fai questo</button></div><p class="pdesc">${esc(p.desc)}</p></div>`).join("")
+    :`<p class="meta" style="margin:6px 0 0">Nessun allenamento scelto. Tocca "Scegli allenamenti" e aggiungi quelli che ti interessano.</p>`;
+  return `<div class="card" style="margin-bottom:12px"><div class="row between"><div class="label">I miei allenamenti di corsa</div>
+  <button class="btn sm ${showLib?"primary":"ghost"}" data-act="rp-lib">${showLib?"Fatto":"Scegli allenamenti"}</button></div>${body}</div>`;
+}
+function pianoBox(){const p=runPick&&planById(runPick); if(!p) return "";
+  return `<div class="pbox"><b>${esc(p.nome)}</b><ol class="steps">${p.passi.map(s=>`<li>${esc(s)}</li>`).join("")}</ol><div class="meta" style="margin-top:6px">A fine corsa inserisci km e durata e salva.</div></div>`;}
+function tipiForm(){return [...new Set([...(state.runPlans||[]).map(id=>(planById(id)||{}).nome).filter(Boolean),...TIPI])];}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act;
+  if(a==="rp-lib"){showLib=!showLib;render();}
+  else if(a==="rp-toggle"){const id=b.dataset.id;state.runPlans=state.runPlans||[];const i=state.runPlans.indexOf(id);
+    if(i>=0)state.runPlans.splice(i,1);else state.runPlans.push(id);saveRuns();render();}
+  else if(a==="rp-do"){runPick=b.dataset.id;runForm=true;showLib=false;render();window.scrollTo(0,0);}
+});
 const paceTxt=(sec,km)=>{if(!km||!sec)return "–";const p=Math.round(sec/km);return Math.floor(p/60)+":"+String(p%60).padStart(2,"0");};
 const durTxt=s=>{s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),ss=s%60;return h?h+"h"+String(m).padStart(2,"0"):m+":"+String(ss).padStart(2,"0");};
 function parseDur(v){const p=String(v).trim().split(/[:.,]/).map(x=>parseInt(x,10));if(p.some(isNaN)||!p.length)return NaN;
@@ -582,7 +626,7 @@ function saveRunForm(){
   const hr=parseInt(document.getElementById("rf-hr").value,10), dv=document.getElementById("rf-d").value, tipo=document.getElementById("rf-tipo").value;
   if(!(km>0)){toast("Inserisci i km percorsi");return;} if(!(sec>0)){toast("Inserisci la durata, es. 32:15");return;}
   const [y,m,d]=(dv||dayKey(Date.now())).split("-").map(Number); const dt=new Date(y,m-1,d,new Date().getHours(),new Date().getMinutes());
-  state.runs=state.runs||[]; state.runs.push({id:"m"+uid(),t:dt.getTime(),km:Math.round(km*100)/100,sec,hr:hr>0?hr:null,tipo});
+  state.runs=state.runs||[]; state.runs.push({id:"m"+uid(),t:dt.getTime(),km:Math.round(km*100)/100,sec,hr:hr>0?hr:null,tipo,piano:(RUN_LIB.find(p=>p.nome===tipo)||{}).id||null}); runPick=null;
   saveRuns(); runForm=false; render(); toast("Corsa salvata: "+fmt(km)+" km a "+paceTxt(sec,km)+"/km");
 }
 function vCorsa(){
@@ -590,15 +634,15 @@ function vCorsa(){
   const sumKm=a=>a.reduce((s,r)=>s+r.km,0), sumSec=a=>a.reduce((s,r)=>s+r.sec,0);
   const wk=runs.filter(r=>r.t>=weekStart(now).getTime()), mo=runs.filter(r=>dayKey(r.t).slice(0,7)===dayKey(now).slice(0,7));
   const l4=runs.filter(r=>r.t>=now-28*864e5);
-  const form=runForm?`<div class="card" style="margin-bottom:14px"><h2 style="margin-bottom:10px">Nuova corsa</h2><div class="rform">
+  const form=runForm?`<div class="card" style="margin-bottom:14px"><h2 style="margin-bottom:10px">Nuova corsa</h2>${pianoBox()}<div class="rform">
     <label>Data<input class="inp" type="date" id="rf-d" value="${dayKey(now)}"></label>
-    <label>Tipo<select class="inp" id="rf-tipo">${TIPI.map(t=>`<option>${t}</option>`).join("")}</select></label>
+    <label>Tipo<select class="inp" id="rf-tipo">${tipiForm().map(t=>`<option ${runPick&&planById(runPick)&&planById(runPick).nome===t?"selected":""}>${esc(t)}</option>`).join("")}</select></label>
     <label>Distanza (km)<input class="inp" id="rf-km" inputmode="decimal" placeholder="5,0"></label>
     <label>Durata<input class="inp" id="rf-t" inputmode="numeric" placeholder="mm:ss o h:mm:ss"></label>
     <label>FC media (facoltativa)<input class="inp" id="rf-hr" inputmode="numeric" placeholder="bpm"></label></div>
     <div class="row" style="margin-top:12px"><button class="btn primary grow" data-act="runsave">Salva corsa</button><button class="btn ghost" data-act="runcancel">Annulla</button></div></div>`:"";
   const src=acts.status==="ok"?"Le corse registrate con l'orologio arrivano da sole da Garmin.":acts.status==="error"?"Importazione da Garmin non disponibile al momento: puoi aggiungere le corse a mano.":"";
-  if(!runs.length) return `<h1>Corsa</h1><p class="sub">Chilometri, tempi e passo delle tue uscite.</p>${form}
+  if(!runs.length) return `<h1>Corsa</h1><p class="sub">Chilometri, tempi e passo delle tue uscite.</p>${form}${runForm?"":vPiani()}
     <div class="card empty"><strong>Nessuna corsa ancora</strong>${src||"Aggiungi la prima uscita per vedere chilometri e passo."}${runForm?"":`<div style="margin-top:12px"><button class="btn primary" data-act="runadd">+ Aggiungi corsa</button></div>`}</div>`;
   const weeks=[];for(let i=7;i>=0;i--){const s=weekStart(now);s.setDate(s.getDate()-7*i);const e=new Date(s);e.setDate(e.getDate()+7);weeks.push({s,km:sumKm(runs.filter(r=>r.t>=s.getTime()&&r.t<e.getTime()))});}
   return `<h1>Corsa</h1><p class="sub">${src||"Chilometri, tempi e passo delle tue uscite."}</p>
@@ -606,7 +650,7 @@ function vCorsa(){
   <div class="stat"><div class="label">Mese</div><div class="v">${fmt(Math.round(sumKm(mo)*10)/10)}<small> km</small></div></div>
   <div class="stat"><div class="label">Passo 4 sett.</div><div class="v">${paceTxt(sumSec(l4),sumKm(l4))}<small> /km</small></div></div></div>
   ${form}${runForm?"":`<button class="btn primary block" data-act="runadd" style="margin-bottom:14px">+ Aggiungi corsa</button>`}
-  <div class="card" style="margin-bottom:12px"><div class="label">Km per settimana</div>${weekChart(weeks)}</div>
+  ${runForm?"":vPiani()}<div class="card" style="margin-bottom:12px"><div class="label">Km per settimana</div>${weekChart(weeks)}</div>
   <div class="card"><div class="label" style="margin-bottom:2px">Uscite</div><div class="runs">${runs.slice(0,30).map(r=>`<div class="run"><div class="grow">
     <div class="main">${fmt(Math.round(r.km*100)/100)} km <span>· ${durTxt(r.sec)} · ${paceTxt(r.sec,r.km)}/km</span></div>
     <div class="meta">${dShort(dayKey(r.t))} · ${esc(r.tipo)}${r.hr?" · FC "+r.hr+(r.hrMax?"/"+r.hrMax:""):""}${r.te?" · effetto aerobico "+fmt(r.te):""}${r.g?' · <span class="src">Garmin</span>':""}</div></div>
@@ -703,8 +747,8 @@ document.addEventListener("click",e=>{
   switch(a){
     case "tab": go(b.dataset.v); break;
     case "gallow": askGarmin(); break;
-    case "runadd": runForm=true; render(); setTimeout(()=>{const k=document.getElementById("rf-km");k&&k.focus();},50); break;
-    case "runcancel": runForm=false; render(); break;
+    case "runadd": runPick=null; runForm=true; render(); setTimeout(()=>{const k=document.getElementById("rf-km");k&&k.focus();},50); break;
+    case "runcancel": runPick=null; runForm=false; render(); break;
     case "runsave": saveRunForm(); break;
     case "rundel": {const id=b.dataset.id; if(confirmDel===id){const r=(state.runs||[]).find(x=>x.id===id); state.runs=(state.runs||[]).filter(x=>x.id!==id); if(r&&r.g){state.runsHidden=state.runsHidden||[];state.runsHidden.push(r.g);} saveRuns(); confirmDel=null; toast("Corsa eliminata"); render();} else {confirmDel=id; render();} break;}
     case "grefresh": if(MCP){garmin.refreshing=true;render();MCP.invalidate(HA,"ha_get_state").catch(()=>{});setTimeout(()=>{garmin.refreshing=false;softRender();},4000);} break;
