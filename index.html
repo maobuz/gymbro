@@ -345,13 +345,15 @@ function lastDone(sid){const s=allSets().filter(x=>x.s===sid);if(!s.length)retur
 
 function vOggi(){
   const w=weekStats();
-  const vol=w.vol>=1000?fmt(Math.round(w.vol/100)/10)+"<small> t</small>":fmt(Math.round(w.vol))+"<small> kg</small>";
+  const vol=Math.round(w.vol).toLocaleString("it-IT")+"<small> kg</small>";
   return `<h1>Allenamento</h1><p class="sub">Scegli la scheda di oggi e segna ogni serie man mano.</p>
   ${vGarmin()}
-  <div class="stats"><div class="stat"><div class="label">Giorni</div><div class="v">${w.giorni}<small> /7</small></div></div>
-  <div class="stat"><div class="label">Serie</div><div class="v">${w.serie}</div></div>
-  <div class="stat"><div class="label">Volume</div><div class="v">${vol}</div></div></div>
-  <div class="label" style="margin-bottom:8px">Ultimi 7 giorni · ${state.esempio?"esercizi proposti, modificabili in Schede":"le tue schede"}</div>
+  <div class="label" style="margin-bottom:8px">I tuoi ultimi 7 giorni</div>
+  <div class="stats" style="margin-bottom:6px"><div class="stat"><div class="label">Allenamenti</div><div class="v">${w.giorni}<small> ${w.giorni===1?"giorno":"giorni"}</small></div></div>
+  <div class="stat"><div class="label">Serie fatte</div><div class="v">${w.serie}</div></div>
+  <div class="stat"><div class="label">Peso sollevato</div><div class="v">${vol}</div></div></div>
+  <p class="meta" style="margin:0 0 18px">Peso sollevato = somma di peso × ripetizioni di tutte le serie.</p>
+  <div class="label" style="margin-bottom:8px">Le tue schede</div>
   <div class="stack">${state.schede.length?state.schede.map(s=>{const ld=lastDone(s.id);return `<div class="card scheda-card">
     <div class="row between"><h2>${esc(s.nome)}</h2><span class="meta">${ld?"Ultima: "+dShort(ld):"Mai fatta"}</span></div>
     <div class="exl">${s.esercizi.map(e=>esc(exInfo(e.ex).n)).join(" · ")||"Nessun esercizio"}</div>
