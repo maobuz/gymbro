@@ -1,5 +1,5 @@
 // GymBro Lite: funziona offline. Cambia VERSIONE a ogni aggiornamento dell'app.
-const VERSIONE = "gymbro-lite-v1";
+const VERSIONE = "gymbro-lite-v2";
 const FILE = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
