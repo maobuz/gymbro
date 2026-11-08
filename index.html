@@ -755,7 +755,12 @@ document.addEventListener("change",e=>{
   r.readAsText(t.files[0]);
 });
 /* App installabile: lavoro offline e dati persistenti */
-if("serviceWorker" in navigator&&location.protocol==="https:"){window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{});});}
+if("serviceWorker" in navigator&&location.protocol==="https:"){
+  const giaControllata=!!navigator.serviceWorker.controller; let ricaricata=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{if(giaControllata&&!ricaricata){ricaricata=true;location.reload();}});
+  window.addEventListener("load",()=>{navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(r=>{
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)r.update().catch(()=>{});});}).catch(()=>{});});
+}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
 
 /* ---------- Timer di recupero ---------- */
