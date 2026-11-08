@@ -426,7 +426,7 @@ function vSchede(){
     <button class="btn sm" data-act="edit" data-id="${s.id}">Modifica</button></div>`).join("")}
   <button class="btn primary block" data-act="new">+ Nuova scheda</button>
   <button class="btn block" data-act="pdf-open"${pdfLoading?" disabled":""}>${pdfLoading?"Leggo il PDF…":"Importa scheda da PDF"}</button>
-  <input type="file" id="pdf-file" accept="application/pdf,.pdf" hidden></div>
+  <input type="file" id="pdf-file" hidden></div>
 `;
 }
 
@@ -795,7 +795,9 @@ async function apriPdf(file){
   try{
     const pdfjs=await import(new URL("lib/pdf.min.mjs",location.href).href);
     pdfjs.GlobalWorkerOptions.workerSrc=new URL("lib/pdf.worker.min.mjs",location.href).href;
-    const schede=await leggiSchedaPdf(pdfjs,new Uint8Array(await file.arrayBuffer()));
+    const dati=new Uint8Array(await file.arrayBuffer());
+    if(String.fromCharCode(...dati.slice(0,5))!=="%PDF-"){pdfLoading=false;render();toast("Questo file non \u00e8 un PDF: scegli il file della scheda");return;}
+    const schede=await leggiSchedaPdf(pdfjs,dati);
     if(!schede.length){pdfLoading=false;render();toast("Non ho trovato una tabella di esercizi in questo PDF");return;}
     pdfImport={file:file.name,schede}; pdfLoading=false; go("importa");
   }catch(e){pdfLoading=false;render();toast("Non riesco a leggere il PDF: serve internet la prima volta, poi riprova");}
