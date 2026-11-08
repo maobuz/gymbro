@@ -826,7 +826,22 @@ document.addEventListener("click",e=>{const b=e.target.closest("[data-act]"); if
 document.addEventListener("change",e=>{const t=e.target; if(t.id==="pdf-file"&&t.files&&t.files[0]){const f=t.files[0];t.value="";apriPdf(f);}});
 
 /* ---------- Impostazioni ---------- */
-function vImpostazioni(){return `<h1>Impostazioni</h1><p class="sub">Backup dei dati di questo telefono.</p>${vBackup()}`;}
+/* ---------- Tema chiaro / scuro ---------- */
+const TK="gymbro-tema", TEMI=[["auto","Automatico"],["light","Chiaro"],["dark","Scuro"]];
+function getTema(){try{return localStorage.getItem(TK)||"auto";}catch(e){return "auto";}}
+function applyTema(){const t=getTema(), r=document.documentElement;
+  if(t==="auto") r.removeAttribute("data-theme"); else r.setAttribute("data-theme",t);
+  let m=document.getElementById("tema-meta"); if(!m){m=document.createElement("meta");m.name="theme-color";m.id="tema-meta";document.head.appendChild(m);}
+  if(t==="auto") m.removeAttribute("content"); else m.content=t==="dark"?"#111316":"#eceff2";}
+applyTema();
+function vTema(){const t=getTema();
+  return `<div class="card" style="margin-bottom:12px"><div class="label" style="margin-bottom:8px">Colore dello sfondo</div>
+  <div class="seg" style="grid-template-columns:repeat(3,1fr);margin:0">${TEMI.map(([v,l])=>`<button class="${v===t?"on":""}" data-act="tema" data-v="${v}">${l}</button>`).join("")}</div>
+  <p class="meta" style="margin:8px 0 0">Automatico segue l'impostazione chiaro/scuro del telefono.</p></div>`;}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act='tema']"); if(!b) return;
+  try{localStorage.setItem(TK,b.dataset.v);}catch(err){} applyTema(); render();});
+
+function vImpostazioni(){return `<h1>Impostazioni</h1><p class="sub">Colore dello sfondo e backup dei dati.</p>${vTema()}${vBackup()}`;}
 /* ---------- Backup (Esporta / Importa) ---------- */
 const LBK="gymbro-ultimo-backup";
 let pendingImport=null;
