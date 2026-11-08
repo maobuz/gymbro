@@ -351,8 +351,8 @@ function softRender(){const a=document.activeElement;if(a&&(a.tagName==="INPUT"|
 document.addEventListener("focusout",()=>{if(pendingRender){setTimeout(()=>{const a=document.activeElement;if(!(a&&a.tagName==="INPUT")){pendingRender=false;render();}},50);}});
 
 function render(){
-  ["oggi","schede","corsa","progressi","impostazioni"].forEach(t=>document.getElementById("nav-"+t).classList.toggle("on",(view==="sessione"?"oggi":view==="modifica"?"schede":view)===t));
-  app.innerHTML=view==="oggi"?vOggi():view==="sessione"?vSessione():view==="schede"?vSchede():view==="modifica"?vModifica():view==="corsa"?vCorsa():view==="impostazioni"?vImpostazioni():vProgressi();
+  ["oggi","schede","corsa","progressi","impostazioni"].forEach(t=>document.getElementById("nav-"+t).classList.toggle("on",(view==="sessione"?"oggi":(view==="modifica"||view==="importa")?"schede":view)===t));
+  app.innerHTML=view==="oggi"?vOggi():view==="sessione"?vSessione():view==="schede"?vSchede():view==="modifica"?vModifica():view==="corsa"?vCorsa():view==="impostazioni"?vImpostazioni():view==="importa"?vImporta():vProgressi();
 }
 
 function weekStats(){
@@ -424,7 +424,9 @@ function vSchede(){
   <div class="stack">${state.schede.map(s=>`<div class="card row between"><div class="grow"><h2>${esc(s.nome)}</h2>
     <div class="meta">${s.esercizi.length} esercizi · ${s.esercizi.reduce((a,e)=>a+e.serie,0)} serie</div></div>
     <button class="btn sm" data-act="edit" data-id="${s.id}">Modifica</button></div>`).join("")}
-  <button class="btn primary block" data-act="new">+ Nuova scheda</button></div>
+  <button class="btn primary block" data-act="new">+ Nuova scheda</button>
+  <button class="btn block" data-act="pdf-open"${pdfLoading?" disabled":""}>${pdfLoading?"Leggo il PDF…":"Importa scheda da PDF"}</button>
+  <input type="file" id="pdf-file" accept="application/pdf,.pdf" hidden></div>
 `;
 }
 
@@ -707,6 +709,119 @@ function weekChart(weeks){
     ${w.km?`<text x="${(x+bw*.32).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" font-size="10" fill="var(--ink)">${fmt(Math.round(w.km*10)/10)}</text>`:""}
     <text x="${(x+bw*.32).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${w.s.getDate()}/${w.s.getMonth()+1}</text>`;}).join("")}</svg>`;
 }
+
+/* ---------- Importa scheda da PDF ---------- */
+// Legge una scheda in PDF (tabella ESERCIZI / SERIE / RIPETIZIONI / PAUSE / NOTE) e la trasforma in schede dell'app.
+async function leggiSchedaPdf(pdfjs, data){
+  const doc=await pdfjs.getDocument({data,isEvalSupported:false}).promise;
+  const righe=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p), tc=await page.getTextContent();
+    const items=tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:i.str,x:i.transform[4],y:i.transform[5],w:i.width||0}));
+    items.sort((a,b)=>b.y-a.y||a.x-b.x);
+    const gruppi=[];
+    for(const it of items){const g=gruppi.find(g=>Math.abs(g.y-it.y)<3);if(g)g.items.push(it);else gruppi.push({y:it.y,items:[it]});}
+    gruppi.sort((a,b)=>b.y-a.y).forEach(g=>{g.items.sort((a,b)=>a.x-b.x);righe.push(g.items);});
+  }
+  return interpreta(righe);
+}
+const testo=r=>r.map(i=>i.s).join(" ").replace(/\s+/g," ").trim();
+function unisci(items){ // unisce i pezzi vicini in "celle"
+  const out=[];
+  for(const it of items){const l=out[out.length-1];
+    if(l&&it.x-(l.x+l.w)<8){l.s+=(it.x-(l.x+l.w)>1.5?" ":"")+it.s;l.w=it.x+it.w-l.x;} else out.push({...it});}
+  return out;
+}
+function interpreta(righe){
+  const schede=[], note=[]; let cur=null, cols=null, inNote=false;
+  for(const r of righe){
+    const t=testo(r), T=t.toUpperCase();
+    const g=t.match(/^(\d+)\s*°?\s*GIORNO\s*(.*)$/i);
+    if(g){cur={nome:"Giorno "+g[1]+(g[2]?" · "+bello(g[2]):""),esercizi:[]};schede.push(cur);cols=null;inNote=false;continue;}
+    if(/^N\s*O\s*T\s*E\b/.test(T)){inNote=true;continue;}
+    if(/^ESERCIZI\b/.test(T)&&/\bSERIE\b/.test(T)){
+      cols={};r.forEach(i=>{const k=i.s.toUpperCase();
+        if(/SERIE/.test(k))cols.serie=i.x+i.w/2; else if(/RIPET/.test(k))cols.rip=i.x+i.w/2; else if(/PAUS|RECUP/.test(k))cols.pausa=i.x+i.w/2; else if(/NOTE/.test(k))cols.note=i.x+i.w/2;});
+      inNote=false;continue;}
+    if(inNote&&!cur){const n=t.replace(/^[•\-•·*]\s*/,"");if(n)note.push(n);continue;}
+    if(!cur||!cols)continue;
+    const celle=unisci(r); const nomeParts=[], val={serie:"",rip:"",pausa:"",note:[]};
+    const limiteNome=cols.serie-25;
+    for(const c of celle){
+      const cx=c.x+c.w/2;
+      if(c.x+c.w<=limiteNome+20&&c.x<limiteNome){nomeParts.push(c.s);continue;}
+      const confineNote=cols.note!=null?(cols.pausa!=null?(cols.pausa+cols.note)/2:cols.note-40):1e9;
+      if(c.x>=confineNote-5||cx>=confineNote){val.note.push(c.s);continue;}
+      const d={serie:Math.abs(cx-cols.serie),rip:Math.abs(cx-cols.rip),pausa:cols.pausa!=null?Math.abs(cx-cols.pausa):1e9};
+      const k=Object.keys(d).sort((a,b)=>d[a]-d[b])[0]; val[k]=(val[k]+" "+c.s).trim();
+    }
+    const nome=nomeParts.join(" ").replace(/\s+/g," ").trim(); const serie=parseInt(val.serie,10);
+    if(!nome||!(serie>0))continue;
+    const rp=parseRip(val.rip);
+    cur.esercizi.push({nome,serie,rMin:rp.min,rMax:rp.max,u:rp.u,rec:parsePausa(val.pausa),nota:val.note.join(" ").trim()});
+  }
+  schede.forEach(s=>s.note=note.slice());
+  return schede.filter(s=>s.esercizi.length);
+}
+function bello(s){s=s.replace(/[_]+/g," e ").replace(/\s+/g," ").trim().toLowerCase();return s.charAt(0).toUpperCase()+s.slice(1);}
+function parseRip(v){v=String(v||"").trim();
+  const u=/[’'′]/.test(v)&&!/[”"″]/.test(v)?"min":/[”"″]|sec/i.test(v)?"sec":"rip";
+  const n=v.match(/\d+/g)||["10"]; const a=parseInt(n[0],10), b=n[1]?parseInt(n[1],10):a;
+  return {min:Math.min(a,b),max:Math.max(a,b),u};}
+function parsePausa(v){v=String(v||"").trim(); if(!v||/^[-–—]$/.test(v))return 0;
+  let m=v.match(/(\d+)\s*[’'′]\s*(\d+)?/); if(m)return parseInt(m[1],10)*60+(m[2]?parseInt(m[2],10):0);
+  m=v.match(/(\d+)/); return m?parseInt(m[1],10):90;}
+
+const STOP=new Set(["con","alla","al","ai","allo","da","di","e","o","il","la","le","lo","a","in","per","del","della"]);
+const tok=n=>slug(n).split("-").filter(w=>w&&!STOP.has(w)).sort().join(" ");
+function indovina(n){const s=n.toLowerCase();
+  const g=/cardio|tapis|ellittic|bike|cyclette/.test(s)?"Cardio":/addomin|crunch|plank|russian|ab wheel/.test(s)?"Addome"
+   :/polpacc|calf|\bleg\b|squat|affond|rumeno|hip thrust|glute|hack|belt|adductor|abductor/.test(s)?"Gambe"
+   :/curl|scott|bicip|push ?down|french|overhead|tricip|kickback|\bdip/.test(s)?"Braccia"
+   :/alzate|shoulder|military|lento|face pull|spalle|deltoid|posterior|tirate|scrollat/.test(s)?"Spalle"
+   :/panca|chest|croci|pector|spinte|petto|\bfly\b|piegament/.test(s)?"Petto"
+   :/\blat\b|pull|pulley|rematore|\brow\b|t-bar|trazion|dorso|stacco|hyperext/.test(s)?"Schiena":"Altro";
+  const e=g==="Cardio"?"Cardio":/manubri/.test(s)?"Manubri":/cav[oi]|pulley|corda|push ?down/.test(s)?"Cavi":/bilanciere|\basta\b|\bmp\b|panca piana/.test(s)?"Bilanciere":/addomin|trazion|piegament|corpo libero/.test(s)?"Corpo libero":"Macchina";
+  return {g,e};}
+function trovaEsercizio(nome){
+  const t=tok(nome), all=[...CAT,...(state.custom||[])];
+  const hit=all.find(c=>tok(c.n)===t); if(hit) return hit.id;
+  const g=indovina(nome), id="c-"+slug(nome)+"-"+uid().slice(0,3);
+  (state.custom||(state.custom=[])).push({id,n:nome,g:g.g,e:g.e}); return id;
+}
+let pdfImport=null, pdfLoading=false;
+async function apriPdf(file){
+  pdfLoading=true; render();
+  try{
+    const pdfjs=await import(new URL("lib/pdf.min.mjs",location.href).href);
+    pdfjs.GlobalWorkerOptions.workerSrc=new URL("lib/pdf.worker.min.mjs",location.href).href;
+    const schede=await leggiSchedaPdf(pdfjs,new Uint8Array(await file.arrayBuffer()));
+    if(!schede.length){pdfLoading=false;render();toast("Non ho trovato una tabella di esercizi in questo PDF");return;}
+    pdfImport={file:file.name,schede}; pdfLoading=false; go("importa");
+  }catch(e){pdfLoading=false;render();toast("Non riesco a leggere il PDF: serve internet la prima volta, poi riprova");}
+}
+function vImporta(){
+  if(!pdfImport){view="schede";return vSchede();}
+  const S=pdfImport.schede, tot=S.reduce((a,s)=>a+s.esercizi.length,0);
+  return `<button class="back" data-act="pdf-no">‹ Schede</button><h1>Importa scheda</h1>
+  <p class="sub">Da “${esc(pdfImport.file)}” ho letto ${S.length} ${S.length===1?"giorno":"giorni"} e ${tot} esercizi. Controlla e conferma.</p>
+  <div class="stack">${S.map(s=>`<div class="card"><h2>${esc(s.nome)}</h2><div class="hist" style="margin-top:6px">${s.esercizi.map(e=>`<div><b>${e.serie}×${e.rMin===e.rMax?e.rMax:e.rMin+"–"+e.rMax}${e.u==="sec"?"″":e.u==="min"?"′":""}</b><span>${esc(e.nome)}<br><small>${e.rec?"recupero "+fmtTime(e.rec):"senza recupero"}${e.nota?" · "+esc(e.nota):""}</small></span></div>`).join("")}</div></div>`).join("")}
+  <button class="btn primary block" data-act="pdf-add">Aggiungi alle mie schede</button>
+  <button class="btn block" data-act="pdf-replace">${confirmDel==="pdf"?"Tocca di nuovo: le schede attuali verranno tolte":"Sostituisci le schede attuali"}</button>
+  <p class="meta" style="margin:0">Sostituire le schede non cancella gli allenamenti già segnati: restano nei Progressi.</p></div>`;
+}
+function applicaPdf(sostituisci){
+  const nuove=pdfImport.schede.map(s=>({id:uid(),nome:s.nome,note:s.note,esercizi:s.esercizi.map(e=>{const it={ex:trovaEsercizio(e.nome),serie:e.serie,rMin:e.rMin,rMax:e.rMax,rec:e.rec};if(e.u!=="rip")it.u=e.u;if(e.nota)it.nota=e.nota;return it;})}));
+  state.schede=sostituisci?nuove:state.schede.concat(nuove);
+  pdfImport=null; confirmDel=null; saveConfig(); go("schede"); toast(nuove.length+(nuove.length===1?" scheda aggiunta":" schede aggiunte"));
+}
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act]"); if(!b) return; const a=b.dataset.act;
+  if(a==="pdf-open"){const f=document.getElementById("pdf-file"); f&&f.click();}
+  else if(a==="pdf-no"){pdfImport=null;confirmDel=null;go("schede");}
+  else if(a==="pdf-add") applicaPdf(false);
+  else if(a==="pdf-replace"){if(confirmDel==="pdf")applicaPdf(true);else{confirmDel="pdf";render();}}
+});
+document.addEventListener("change",e=>{const t=e.target; if(t.id==="pdf-file"&&t.files&&t.files[0]){const f=t.files[0];t.value="";apriPdf(f);}});
 
 /* ---------- Impostazioni ---------- */
 function vImpostazioni(){return `<h1>Impostazioni</h1><p class="sub">Backup dei dati di questo telefono.</p>${vBackup()}`;}
