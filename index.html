@@ -184,8 +184,9 @@ h2{font-family:var(--f-display);font-weight:600;font-size:21px;margin:0;line-hei
 @media (prefers-reduced-motion:reduce){#timer .rfg{transition:none}}
 #timer.over .tb{background:var(--accent);color:var(--accent-ink)}
 nav{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--surface);border-top:1px solid var(--line);padding:0 max(8px,env(safe-area-inset-right,0px)) env(safe-area-inset-bottom,0px) max(8px,env(safe-area-inset-left,0px))}
-nav .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
-nav button{background:none;border:0;height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted)}
+nav .in{max-width:640px;margin:0 auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr))}
+nav button{background:none;border:0;height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted);min-width:0;padding:0 1px;white-space:nowrap}
+@media (max-width:370px){nav button{font-size:10.5px}}
 nav button svg{width:22px;height:22px}
 nav button.on{color:var(--ink)}
 nav button.on svg{color:var(--accent-text)}
@@ -210,6 +211,7 @@ nav button.on svg{color:var(--accent-text)}
   <button data-act="tab" data-v="schede" id="nav-schede"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>Schede</button>
   <button data-act="tab" data-v="corsa" id="nav-corsa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14" cy="4.5" r="2"/><path d="M7 21l3-6 3 2v5M10 15l1.5-5L8 11l-2 3M11.5 10l3 2.5 3-1"/></svg>Corsa</button>
   <button data-act="tab" data-v="progressi" id="nav-progressi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M5 16l4-5 4 3 6-8"/></svg>Progressi</button>
+  <button data-act="tab" data-v="impostazioni" id="nav-impostazioni"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Impostazioni</button>
 </div></nav>
 
 <script>
@@ -349,8 +351,8 @@ function softRender(){const a=document.activeElement;if(a&&(a.tagName==="INPUT"|
 document.addEventListener("focusout",()=>{if(pendingRender){setTimeout(()=>{const a=document.activeElement;if(!(a&&a.tagName==="INPUT")){pendingRender=false;render();}},50);}});
 
 function render(){
-  ["oggi","schede","corsa","progressi"].forEach(t=>document.getElementById("nav-"+t).classList.toggle("on",(view==="sessione"?"oggi":view==="modifica"?"schede":view)===t));
-  app.innerHTML=view==="oggi"?vOggi():view==="sessione"?vSessione():view==="schede"?vSchede():view==="modifica"?vModifica():view==="corsa"?vCorsa():vProgressi();
+  ["oggi","schede","corsa","progressi","impostazioni"].forEach(t=>document.getElementById("nav-"+t).classList.toggle("on",(view==="sessione"?"oggi":view==="modifica"?"schede":view)===t));
+  app.innerHTML=view==="oggi"?vOggi():view==="sessione"?vSessione():view==="schede"?vSchede():view==="modifica"?vModifica():view==="corsa"?vCorsa():view==="impostazioni"?vImpostazioni():vProgressi();
 }
 
 function weekStats(){
@@ -423,7 +425,7 @@ function vSchede(){
     <div class="meta">${s.esercizi.length} esercizi · ${s.esercizi.reduce((a,e)=>a+e.serie,0)} serie</div></div>
     <button class="btn sm" data-act="edit" data-id="${s.id}">Modifica</button></div>`).join("")}
   <button class="btn primary block" data-act="new">+ Nuova scheda</button></div>
-  ${vBackup()}`;
+`;
 }
 
 const RECS=[0,10,20,30,45,60,75,90,120,150,180,240,300];
@@ -706,6 +708,8 @@ function weekChart(weeks){
     <text x="${(x+bw*.32).toFixed(1)}" y="${H-6}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${w.s.getDate()}/${w.s.getMonth()+1}</text>`;}).join("")}</svg>`;
 }
 
+/* ---------- Impostazioni ---------- */
+function vImpostazioni(){return `<h1>Impostazioni</h1><p class="sub">Backup dei dati di questo telefono.</p>${vBackup()}`;}
 /* ---------- Backup (Esporta / Importa) ---------- */
 const LBK="gymbro-ultimo-backup";
 let pendingImport=null;
@@ -716,7 +720,7 @@ function vBackup(){
     return `<div class="card" style="margin-top:18px"><h2>Ripristinare il backup?</h2>
     <p class="meta" style="margin:6px 0 12px">Backup del ${esc(pendingImport.quando)}: ${(d.schede||[]).length} schede, ${ns} serie, ${(d.runs||[]).length} corse. I dati attuali su questo telefono verranno sostituiti.</p>
     <div class="row"><button class="btn primary grow" data-act="bk-ok">Ripristina</button><button class="btn ghost" data-act="bk-no">Annulla</button></div></div>`;}
-  return `<div class="card" style="margin-top:18px"><div class="label" style="margin-bottom:4px">Backup dei dati</div>
+  return `<div class="card"><div class="label" style="margin-bottom:4px">Backup dei dati</div>
   <p class="meta" style="margin:0 0 12px">I dati sono salvati solo su questo telefono (${nSerie} serie, ${nCorse} corse). ${lb?"Ultimo backup: "+esc(lb)+".":"Nessun backup ancora fatto."} Salva una copia su iCloud Drive o Google Drive ogni tanto.</p>
   <div class="row"><button class="btn primary grow" data-act="bk-exp">Esporta backup</button><button class="btn grow" data-act="bk-imp">Importa</button></div>
   <input type="file" id="bk-file" accept="application/json,.json" hidden></div>`;
