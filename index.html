@@ -508,7 +508,7 @@ function verdict(d){
 const DENY=["needs_reauth","server_not_connected","blocked_by_policy","approval_required","not_in_manifest","selection_required","server_not_found"];
 function onGarmin(result){const d=parseG(result&&result.payload);garmin=d?{status:"ok",data:d}:{status:"error",code:"parse"};softRender();}
 function onGarminErr(e){const c=(e&&e.code)||"upstream_error";if(DENY.includes(c)||garmin.status!=="ok")garmin={status:"error",code:c};softRender();}
-const SENZA_GARMIN=true, SENZA_TIMER=true;
+const SENZA_GARMIN=true, SENZA_TIMER=false;
 async function initGarmin(){
   if(SENZA_GARMIN){garmin={status:"absent"};acts={status:"absent",list:[]};softRender();return;}
   if(!window.claude||!window.claude.use){garmin={status:"absent"};softRender();return;}
